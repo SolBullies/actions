@@ -169,16 +169,16 @@ export const POST = async (req: Request) => {
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
 
-    // Simulate the transaction to check for issues
-    const simulationResult = await connection.simulateTransaction(transaction);
-    console.log(simulationResult);
-    if (simulationResult.value.err) {
-      console.error("Transaction simulation failed:", simulationResult.value.err);
-      return new Response(
-        JSON.stringify({ error: 'Transaction simulation failed' }),
-        { status: 400, headers }
-      );
-    }
+    // // Simulate the transaction to check for issues
+    // const simulationResult = await connection.simulateTransaction(transaction);
+    // console.log(simulationResult);
+    // if (simulationResult.value.err) {
+    //   console.error("Transaction simulation failed:", simulationResult.value.err);
+    //   return new Response(
+    //     JSON.stringify({ error: 'Transaction simulation failed' }),
+    //     { status: 400, headers }
+    //   );
+    // }
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
