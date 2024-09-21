@@ -126,7 +126,7 @@ export const POST = async (req: Request) => {
     // Submit the review (mirroring your Anchor test)
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review account
+        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
       ],
@@ -147,9 +147,6 @@ export const POST = async (req: Request) => {
       blockhash,
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
-
-    // Add the review keypair as a signer, like in your test
-    transaction.sign(reviewKeypair);
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
