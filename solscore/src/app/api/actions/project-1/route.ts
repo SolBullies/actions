@@ -28,7 +28,7 @@ export const GET = async () => {
     links: {
       actions: [
         {
-          href: '/api/project-1',
+          href: '/api/actions/project-1',
           label: 'Submit Review',
           parameters: [
             {
