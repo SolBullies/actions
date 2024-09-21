@@ -31,7 +31,7 @@ export const GET = async () => {
     links: {
       actions: [
         {
-          href: '/api/actions/project-1',
+          href: '/api/actions/project-1?rating={rating}&reviewText={reviewText}',
           label: 'Submit Review',
           parameters: [
             {
