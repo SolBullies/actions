@@ -141,9 +141,9 @@ export const POST = async (req: Request) => {
       },
     });
 
-    return new Response(JSON.stringify(payload), {
+    return Response.json(payload, {
       headers,
-    });
+    });    
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
