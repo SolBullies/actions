@@ -24,15 +24,15 @@ const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4H
 // GET handler for the Action API (this is used for defining the input form)
 export const GET = async () => {
   const payload: ActionGetResponse = {
-    title: 'Submit Review for Project',
+    title: 'Submit Review for Project 1',
     icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg', // Replace with a valid image URL
-    description: 'Submit a review for the specified project on-chain',
-    label: 'Submit Review',
+    description: 'Submit a review for Project 1',
+    label: 'Project 1',
     links: {
       actions: [
         {
-          href: '/api/actions/project-1', // This URL will include rating and reviewText as parameters
-          label: 'Submit Review',
+          href: '/api/actions/project-1',
+          label: 'Project 1',
           parameters: [
             {
               type: 'number', // Number input for ratings
@@ -117,6 +117,9 @@ export const POST = async (req: Request) => {
       process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
     );
 
+    // Fetch the recent blockhash
+    const { blockhash } = await connection.getLatestBlockhash();
+
     // Create a transaction instruction for the review program
     const instruction = new TransactionInstruction({
       programId: REVIEW_PROGRAM_ID,
@@ -129,8 +132,10 @@ export const POST = async (req: Request) => {
 
     // Create the transaction
     const transaction = new Transaction().add(instruction);
+
+    // Ensure the transaction has a recent blockhash and fee payer
     transaction.feePayer = accountPubkey;
-    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    transaction.recentBlockhash = blockhash;
 
     // Use createPostResponse to return a Blinks-compatible response
     const payload: ActionPostResponse = await createPostResponse({
