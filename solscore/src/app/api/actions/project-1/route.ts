@@ -111,7 +111,7 @@ export const POST = async (req: Request) => {
     // Create the instruction for submitting a review
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review account
+        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
         { pubkey: PublicKey.default, isSigner: false, isWritable: false }, // System Program (correctly added)
       ],
