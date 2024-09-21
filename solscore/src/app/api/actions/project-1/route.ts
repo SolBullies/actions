@@ -1,30 +1,30 @@
 import {
-  ActionPostResponse,
-  createPostResponse,
+  // ActionPostResponse,
+  // createPostResponse,
   ActionGetResponse,
   ActionPostRequest,
   createActionHeaders,
 } from '@solana/actions';
-import {
-  clusterApiUrl,
-  Connection,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-} from '@solana/web3.js';
+// import {
+//   clusterApiUrl,
+//   Connection,
+//   PublicKey,
+//   Transaction,
+//   TransactionInstruction,
+// } from '@solana/web3.js';
 
-// create the standard headers for this route (including CORS)
+// Create the standard headers for this route (including CORS)
 const headers = createActionHeaders();
 
 // Project-specific configuration (replace with your project's public key)
-const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with the actual project public key
-const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE'); // Replace with your review smart contract program ID
+// const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with the actual project public key
+// const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE'); // Replace with your review smart contract program ID
 
 // GET handler for the Action API (this is used for defining the input form)
-export const GET = async (req: Request) => {
+export const GET = async () => {
   const payload: ActionGetResponse = {
     title: 'Submit Review for Project',
-    icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg',
+    icon: 'https://link-to-image.com/project_icon.jpg', // Replace with a valid image URL
     description: 'Submit a review for the specified project on-chain',
     label: 'Submit Review',
     links: {
@@ -66,64 +66,21 @@ export const OPTIONS = async () => {
 // POST handler for submitting the review on-chain
 export const POST = async (req: Request) => {
   try {
+    // Log the raw request body to inspect the structure
     const body: ActionPostRequest = await req.json();
+    console.log('Received ActionPostRequest body:', JSON.stringify(body, null, 2));
 
-    let account: PublicKey;
-    try {
-      account = new PublicKey(body.account);
-    } catch (err) {
-      return new Response('Invalid "account" provided', {
-        status: 400,
-        headers,
-      });
-    }
+    // From here, you can explore what the body contains
+    // Once we know the structure, we can adjust the rest of the code
 
-    // Retrieve the submitted parameters from the user
-    const { rating, reviewText } = body.parameters || {};
-    if (!rating || !reviewText) {
-      return new Response('Both rating and reviewText are required', {
-        status: 400,
-        headers,
-      });
-    }
-
-    // Create a connection to the Solana cluster (devnet by default)
-    const connection = new Connection(
-      process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
-    );
-
-    // Create a transaction instruction for submitting the review to the on-chain program
-    const instruction = new TransactionInstruction({
-      programId: REVIEW_PROGRAM_ID, // Smart contract program ID for handling reviews
-      keys: [
-        { pubkey: account, isSigner: true, isWritable: true }, // The user submitting the review
-        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false }, // The project to which the review relates
-      ],
-      data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'), // Serialize the review data
-    });
-
-    const transaction = new Transaction().add(instruction);
-
-    // Set the end user as the fee payer
-    transaction.feePayer = account;
-    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-
-    // Create the action post response
-    const payload: ActionPostResponse = await createPostResponse({
-      fields: {
-        transaction,
-        message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
-      },
-    });
-
-    return new Response(JSON.stringify(payload), {
+    // For now, return a placeholder response
+    return new Response('Body logged. Please check the logs.', {
+      status: 200,
       headers,
     });
   } catch (err) {
-    console.log(err);
-    let message = 'An unknown error occurred';
-    if (typeof err == 'string') message = err;
-    return new Response(message, {
+    console.error('Error in POST:', err);
+    return new Response('An error occurred', {
       status: 400,
       headers,
     });
