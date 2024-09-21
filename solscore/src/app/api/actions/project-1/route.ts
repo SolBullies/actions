@@ -65,6 +65,8 @@ export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
+const ReviewAccountSize = 337; // Define the size of the review account in bytes
+
 export const POST = async (req: Request) => {
   try {
     const body: ActionPostRequest = await req.json();
@@ -109,12 +111,9 @@ export const POST = async (req: Request) => {
     // Generate a new Keypair for the review
     const reviewKeypair = Keypair.generate();
 
-    const ReviewAccountSize = 8 + 32 + 32 + 1 + 8 + 256; // Total space for the account
-
     // Calculate rent exemption for the review account
     const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
 
-    // Create an account for the review
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey, // User who is paying for the account creation
       newAccountPubkey: reviewKeypair.publicKey, // New review account
@@ -123,30 +122,38 @@ export const POST = async (req: Request) => {
       programId: REVIEW_PROGRAM_ID, // The program ID that owns this account
     });
 
-    // Submit the review (mirroring your Anchor test)
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
         { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
       ],
-      programId: REVIEW_PROGRAM_ID, // The program ID of your smart contract
+      programId: REVIEW_PROGRAM_ID, // Review program
       data: Buffer.concat([
-        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID (public key)
-        Buffer.from([rating]), // Rating (u8)
-        Buffer.from(reviewText, 'utf8') // Review text as a string
+        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID
+        Buffer.from([rating]), // Rating
+        Buffer.from(reviewText, 'utf8'), // Review text
       ]),
     });
 
-    // Get latest blockhash
+    // Get latest blockhash and create transaction
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create transaction with blockhash and feePayer details
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
+
+    // Simulate transaction to catch errors before submission
+    const simulationResult = await connection.simulateTransaction(transaction);
+    if (simulationResult.value.err) {
+      console.error("Simulation failed", simulationResult.value.err);
+      return new Response(
+        JSON.stringify({ error: 'Transaction simulation failed', details: simulationResult.value.err }),
+        { status: 400, headers }
+      );
+    }
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
@@ -156,9 +163,7 @@ export const POST = async (req: Request) => {
       },
     });
 
-    return Response.json(payload, {
-      headers,
-    });
+    return Response.json(payload, { headers });
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
