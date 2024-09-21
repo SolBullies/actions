@@ -75,12 +75,15 @@ export const POST = async (req: Request) => {
     const body: ActionPostRequest = await req.json();
     const account = body.account;
 
+    console.log("Received account from body:", account);
+
     // Parse the query params from the request URL
     const requestUrl = new URL(req.url);
     const ratingParam = requestUrl.searchParams.get('rating');
     const reviewTextParam = requestUrl.searchParams.get('reviewText');
 
     if (!ratingParam || !reviewTextParam) {
+      console.log("Missing rating or reviewText:", ratingParam, reviewTextParam);
       return new Response(
         JSON.stringify({ error: 'Missing required parameters: rating or reviewText' }),
         { status: 400, headers }
@@ -90,7 +93,11 @@ export const POST = async (req: Request) => {
     const rating = parseInt(ratingParam);
     const reviewText = reviewTextParam;
 
+    console.log("Parsed rating:", rating);
+    console.log("Parsed reviewText:", reviewText);
+
     if (isNaN(rating) || rating < 1 || rating > 5) {
+      console.log("Invalid rating provided:", rating);
       return new Response(
         JSON.stringify({ error: 'Invalid "rating" provided' }),
         { status: 400, headers }
@@ -100,7 +107,8 @@ export const POST = async (req: Request) => {
     let accountPubkey: PublicKey;
     try {
       accountPubkey = new PublicKey(account);
-    } catch {
+    } catch (err) {
+      console.log("Invalid account public key:", err);
       return new Response(
         JSON.stringify({ error: 'Invalid "account" provided' }),
         { status: 400, headers }
@@ -111,13 +119,16 @@ export const POST = async (req: Request) => {
       process.env.SOLANA_RPC! || clusterApiUrl('devnet')
     );
 
+    console.log("Connected to Solana RPC at", process.env.SOLANA_RPC || clusterApiUrl('devnet'));
+
     // Generate a new Keypair for the review
     const reviewKeypair = Keypair.generate();
+    console.log("Generated new reviewKeypair:", reviewKeypair.publicKey.toBase58());
 
     // Calculate rent exemption for the review account
     const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
+    console.log("Calculated lamports for rent exemption:", lamports);
 
-    // Create the instruction to create the account for the review
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey, // User who is paying for the account creation
       newAccountPubkey: reviewKeypair.publicKey, // New review account
@@ -126,7 +137,8 @@ export const POST = async (req: Request) => {
       programId: REVIEW_PROGRAM_ID, // The program ID that owns this account
     });
 
-    // Create the instruction for submitting a review
+    console.log("Created account instruction:", createAccountInstruction);
+
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
         { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
@@ -141,15 +153,19 @@ export const POST = async (req: Request) => {
       ]),
     });
 
+    console.log("Created submit review instruction:", submitReviewInstruction);
+
     // Get latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    console.log("Fetched blockhash:", blockhash, "and lastValidBlockHeight:", lastValidBlockHeight);
 
-    // Create transaction
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
+
+    console.log("Created transaction:", transaction);
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
@@ -159,11 +175,13 @@ export const POST = async (req: Request) => {
       },
     });
 
+    console.log("Transaction payload created successfully:", payload);
+
     return Response.json(payload, {
       headers,
     });
   } catch (err) {
-    console.error('Error in POST:', err);
+    console.error("Error in POST:", err);
     return new Response(
       JSON.stringify({ error: 'An error occurred during processing' }),
       { status: 400, headers }
