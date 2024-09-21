@@ -12,15 +12,21 @@ import {
   Keypair,
   Transaction,
   TransactionInstruction,
+  SystemProgram,
 } from '@solana/web3.js';
 
+// Headers for the response
 const headers = createActionHeaders({
-  chainId: "devnet", // or chainId: "devnet"
-  actionVersion: "2.2.1", // the desired spec version
+  chainId: "devnet", // Set the chainId to devnet
+  actionVersion: "2.2.1", // The desired spec version
 });
 
+// Constants for the review program and project public key
 const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE');
 const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with the actual project public key
+
+// Define the size of the review account based on the Review struct
+const ReviewAccountSize = 32 + 32 + 1 + 4 + 256 + 8; // Modify this size based on the actual struct
 
 export const GET = async () => {
   const payload: ActionGetResponse = {
@@ -108,30 +114,42 @@ export const POST = async (req: Request) => {
     // Generate a new Keypair for the review
     const reviewKeypair = Keypair.generate();
 
+    // Calculate rent exemption for the review account
+    const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
+
+    // Create the instruction to create the account for the review
+    const createAccountInstruction = SystemProgram.createAccount({
+      fromPubkey: accountPubkey, // User who is paying for the account creation
+      newAccountPubkey: reviewKeypair.publicKey, // New review account
+      lamports, // Rent exemption amount
+      space: ReviewAccountSize, // The size of the account in bytes
+      programId: REVIEW_PROGRAM_ID, // The program ID that owns this account
+    });
+
     // Create the instruction for submitting a review
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
         { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
-        { pubkey: PublicKey.default, isSigner: false, isWritable: false }, // System Program (correctly added)
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
       ],
-      programId: REVIEW_PROGRAM_ID, // Review program on Solana
+      programId: REVIEW_PROGRAM_ID, // Review program
       data: Buffer.concat([
-        new PublicKey(PROJECT_PUBLIC_KEY).toBuffer(), // Project ID (public key)
-        Buffer.from([rating]), // Rating (u8)
-        Buffer.from(reviewText, 'utf8') // Review text as a string
+        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID
+        Buffer.from([rating]), // Rating
+        Buffer.from(reviewText, 'utf8') // Review text
       ]),
-    });    
+    });
 
-    // Get the latest blockhash and create the transaction
+    // Get latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create a transaction with blockhash and feePayer details
+    // Create transaction
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
-    }).add(submitReviewInstruction);
+    }).add(createAccountInstruction, submitReviewInstruction);
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
@@ -143,7 +161,7 @@ export const POST = async (req: Request) => {
 
     return Response.json(payload, {
       headers,
-    });    
+    });
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
