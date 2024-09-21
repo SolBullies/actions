@@ -20,44 +20,80 @@ const headers = createActionHeaders({
   actionVersion: "2.2.1",
 });
 
-const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE');
-const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS');
+const REVIEW_PROGRAM_ID = new PublicKey(
+  'HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE'
+);
+const PROJECT_PUBLIC_KEY = new PublicKey(
+  'FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'
+);
 
-export const GET = async () => {
-  const payload: ActionGetResponse = {
-    title: 'Submit Review for Project',
-    icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg',
-    description: 'Submit a review for the specified project on-chain',
-    label: 'Submit Review',
-    links: {
-      actions: [
-        {
-          href: '/api/actions/project-1?rating={rating}&reviewText={reviewText}',
-          label: 'Submit Review',
-          parameters: [
-            {
-              type: 'number',
-              name: 'rating',
-              label: 'Rating (1-5)',
-              required: true,
-              min: 1,
-              max: 5,
-            },
-            {
-              type: 'textarea',
-              name: 'reviewText',
-              label: 'Write your review',
-              required: true,
-            },
-          ],
-        },
-      ],
-    },
+function validatedQueryParams(requestUrl: URL) {
+  const rating = requestUrl.searchParams.get('rating');
+  const reviewText = requestUrl.searchParams.get('reviewText');
+
+  if (!rating || !reviewText) {
+    throw new Error('Missing required parameters: rating or reviewText');
+  }
+
+  return {
+    rating: parseInt(rating, 10),
+    reviewText,
   };
+}
 
-  return new Response(JSON.stringify(payload), {
-    headers,
-  });
+// GET request for generating the URL
+export const GET = async (req: Request) => {
+  try {
+    const requestUrl = new URL(req.url);
+    const baseHref = new URL(
+      `/api/actions/project-1`,
+      requestUrl.origin
+    ).toString();
+
+    const payload: ActionGetResponse = {
+      type: 'action',
+      title: 'Submit Review for Project',
+      icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg',
+      description: 'Submit a review for the specified project on-chain',
+      label: 'Submit Review',
+      links: {
+        actions: [
+          {
+            label: 'Submit Review',
+            href: `${baseHref}?rating={rating}&reviewText={reviewText}`,
+            parameters: [
+              {
+                type: 'number',
+                name: 'rating',
+                label: 'Rating (1-5)',
+                required: true,
+                min: 1,
+                max: 5,
+              },
+              {
+                type: 'textarea',
+                name: 'reviewText',
+                label: 'Write your review',
+                required: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    return Response.json(payload, {
+      headers,
+    });
+  } catch (err) {
+    console.log(err);
+    let message = 'An unknown error occurred';
+    if (typeof err == 'string') message = err;
+    return new Response(message, {
+      status: 400,
+      headers,
+    });
+  }
 };
 
 // Handle OPTIONS request for CORS
@@ -65,38 +101,14 @@ export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
-const ReviewAccountSize = 337; // Define the size of the review account in bytes
-
+// POST handler with proper Transaction object
 export const POST = async (req: Request) => {
   try {
-    // Step 1: Extract the 'url' parameter first
+    const body: ActionPostRequest = await req.json();
+    const account = body.account;
+
     const requestUrl = new URL(req.url);
-    const encodedUrl = requestUrl.searchParams.get('url');
-
-    if (!encodedUrl) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required URL parameter' }),
-        { status: 400, headers }
-      );
-    }
-
-    // Step 2: Decode the inner URL
-    const decodedUrl = decodeURIComponent(encodedUrl);
-    const innerUrl = new URL(decodedUrl);
-
-    // Step 3: Extract rating and reviewText from the inner URL
-    const ratingParam = innerUrl.searchParams.get('rating');
-    const reviewTextParam = innerUrl.searchParams.get('reviewText');
-
-    if (!ratingParam || !reviewTextParam) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required parameters: rating or reviewText' }),
-        { status: 400, headers }
-      );
-    }
-
-    const rating = parseInt(ratingParam);
-    const reviewText = reviewTextParam;
+    const { rating, reviewText } = validatedQueryParams(requestUrl);
 
     if (isNaN(rating) || rating < 1 || rating > 5) {
       return new Response(
@@ -105,11 +117,9 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Step 4: Parse the body of the POST request (account)
-    const body: ActionPostRequest = await req.json();
     let accountPubkey: PublicKey;
     try {
-      accountPubkey = new PublicKey(body.account);
+      accountPubkey = new PublicKey(account);
     } catch {
       return new Response(
         JSON.stringify({ error: 'Invalid "account" provided' }),
@@ -125,58 +135,51 @@ export const POST = async (req: Request) => {
     const reviewKeypair = Keypair.generate();
 
     // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
+    const lamports = await connection.getMinimumBalanceForRentExemption(128);
 
     const createAccountInstruction = SystemProgram.createAccount({
-      fromPubkey: accountPubkey, // User who is paying for the account creation
-      newAccountPubkey: reviewKeypair.publicKey, // New review account
-      lamports: lamports, // Rent exemption amount
-      space: ReviewAccountSize, // The size of the account in bytes
-      programId: REVIEW_PROGRAM_ID, // The program ID that owns this account
+      fromPubkey: accountPubkey,
+      newAccountPubkey: reviewKeypair.publicKey,
+      lamports,
+      space: 128,
+      programId: REVIEW_PROGRAM_ID,
     });
 
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
-        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
+        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true },
+        { pubkey: accountPubkey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
-      programId: REVIEW_PROGRAM_ID, // Review program
+      programId: REVIEW_PROGRAM_ID,
       data: Buffer.concat([
-        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID
-        Buffer.from([rating]), // Rating
-        Buffer.from(reviewText, 'utf8'), // Review text
+        PROJECT_PUBLIC_KEY.toBuffer(),
+        Buffer.from([rating]),
+        Buffer.from(reviewText, 'utf8'),
       ]),
     });
 
-    // Get latest blockhash and create transaction
+    // Get latest blockhash and last valid block height
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
+    // Create transaction
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
 
-    // Simulate transaction to catch errors before submission
-    const simulationResult = await connection.simulateTransaction(transaction);
-    if (simulationResult.value.err) {
-      console.error("Simulation failed", simulationResult.value.err);
-      return new Response(
-        JSON.stringify({ error: 'Transaction simulation failed', details: simulationResult.value.err }),
-        { status: 400, headers }
-      );
-    }
-
-    // Create the post response with the transaction data
+    // No need to serialize or encode transaction, pass it directly
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction,
+        transaction, // Pass the Transaction object directly
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
 
-    return Response.json(payload, { headers });
+    return Response.json(payload, {
+      headers,
+    });
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
