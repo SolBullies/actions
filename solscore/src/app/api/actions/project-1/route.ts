@@ -13,6 +13,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 
+// Create the standard headers for this route (including CORS)
 const headers = createActionHeaders({
   chainId: "devnet", // or chainId: "devnet"
   actionVersion: "2.2.1", // the desired spec version
@@ -21,12 +22,11 @@ const headers = createActionHeaders({
 const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE');
 const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS');
 
-// GET handler for the Action API (this is used for defining the input form)
 export const GET = async () => {
   const payload: ActionGetResponse = {
-    title: 'Submit Review for Project 1',
+    title: 'Submit Review for Project',
     icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg', // Replace with a valid image URL
-    description: 'Submit a review for Project 1',
+    description: 'Submit a review for the specified project on-chain',
     label: 'Submit Review',
     links: {
       actions: [
@@ -64,10 +64,9 @@ export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
-// POST handler for submitting the review on-chain
 export const POST = async (req: Request) => {
   try {
-    // Get account from ActionPostRequest (the POST request body)
+    // Read the ActionPostRequest body
     const body: ActionPostRequest = await req.json();
     const account = body.account;
 
@@ -78,7 +77,7 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Now get rating and reviewText from the URL
+    // Retrieve rating and reviewText from URL query parameters
     const requestUrl = new URL(req.url);
     const ratingParam = requestUrl.searchParams.get('rating');
     const reviewTextParam = requestUrl.searchParams.get('reviewText');
@@ -100,7 +99,6 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Validate account
     let accountPubkey: PublicKey;
     try {
       accountPubkey = new PublicKey(account);
@@ -111,15 +109,12 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Create a connection to the Solana cluster (devnet or mainnet)
     const connection = new Connection(
       process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
     );
 
-    // Fetch the recent blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create a transaction instruction for the review program
     const instruction = new TransactionInstruction({
       programId: REVIEW_PROGRAM_ID,
       keys: [
@@ -129,25 +124,19 @@ export const POST = async (req: Request) => {
       data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'),
     });
 
-    // Create the transaction and add the instruction
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
     }).add(instruction);
 
-    // Check that the transaction is constructed correctly
-    if (!transaction.instructions || transaction.instructions.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Transaction has no instructions' }),
-        { status: 400, headers },
-      );
-    }
+    // Log transaction details for debugging
+    console.log('Transaction:', transaction);
 
-    // Use createPostResponse to return a Blinks-compatible response
+    // Pass the `Transaction` object directly to `createPostResponse`
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction,
+        transaction, // Pass the `Transaction` object
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
