@@ -113,12 +113,15 @@ export const POST = async (req: Request) => {
       keys: [
         { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
-        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false }, // The project being reviewed
-        { pubkey: PublicKey.default, isSigner: false, isWritable: false }, // System Program (should be added correctly)
+        { pubkey: PublicKey.default, isSigner: false, isWritable: false }, // System Program (correctly added)
       ],
       programId: REVIEW_PROGRAM_ID, // Review program on Solana
-      data: Buffer.from(JSON.stringify({ rating, reviewText })), // Convert the review data to a buffer
-    });
+      data: Buffer.concat([
+        new PublicKey(PROJECT_PUBLIC_KEY).toBuffer(), // Project ID (public key)
+        Buffer.from([rating]), // Rating (u8)
+        Buffer.from(reviewText, 'utf8') // Review text as a string
+      ]),
+    });    
 
     // Get the latest blockhash and create the transaction
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -129,15 +132,6 @@ export const POST = async (req: Request) => {
       blockhash,
       lastValidBlockHeight,
     }).add(submitReviewInstruction);
-
-    // You can also create a versioned transaction as an alternative:
-    // const transaction = new VersionedTransaction(
-    //   new TransactionMessage({
-    //     payerKey: accountPubkey,
-    //     recentBlockhash: blockhash,
-    //     instructions: [submitReviewInstruction],
-    //   }).compileToV0Message(),
-    // );
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
