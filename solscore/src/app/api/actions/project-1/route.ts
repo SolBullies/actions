@@ -109,40 +109,47 @@ export const POST = async (req: Request) => {
     // Generate a new Keypair for the review
     const reviewKeypair = Keypair.generate();
 
-    // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(8 + 32 + 32 + 1 + 256);
+    const ReviewAccountSize = 8 + 32 + 32 + 1 + 8 + 256; // Total space for the account
 
+    // Calculate rent exemption for the review account
+    const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
+
+    // Create an account for the review
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey, // User who is paying for the account creation
       newAccountPubkey: reviewKeypair.publicKey, // New review account
       lamports: lamports, // Rent exemption amount
-      space: 8 + 32 + 32 + 1 + 256, // The size of the account in bytes
+      space: ReviewAccountSize, // The size of the account in bytes
       programId: REVIEW_PROGRAM_ID, // The program ID that owns this account
     });
 
+    // Submit the review (mirroring your Anchor test)
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true }, // Review account
+        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review account
         { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
       ],
-      programId: REVIEW_PROGRAM_ID, // Review program
+      programId: REVIEW_PROGRAM_ID, // The program ID of your smart contract
       data: Buffer.concat([
-        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID
-        Buffer.from([rating]), // Rating
-        Buffer.from(reviewText, 'utf8') // Review text
+        PROJECT_PUBLIC_KEY.toBuffer(), // Project ID (public key)
+        Buffer.from([rating]), // Rating (u8)
+        Buffer.from(reviewText, 'utf8') // Review text as a string
       ]),
     });
 
     // Get latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create transaction
+    // Create transaction with blockhash and feePayer details
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
+
+    // Add the review keypair as a signer, like in your test
+    transaction.sign(reviewKeypair);
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
