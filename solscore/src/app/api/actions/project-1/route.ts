@@ -45,10 +45,7 @@ function validatedQueryParams(requestUrl: URL) {
 export const GET = async (req: Request) => {
   try {
     const requestUrl = new URL(req.url);
-    const baseHref = new URL(
-      `/api/actions/project-1`,
-      requestUrl.origin
-    ).toString();
+    const baseHref = new URL(`/api/actions/project-1`, requestUrl.origin).toString();
 
     const payload: ActionGetResponse = {
       type: 'action',
@@ -82,17 +79,11 @@ export const GET = async (req: Request) => {
       },
     };
 
-    return Response.json(payload, {
-      headers,
-    });
+    return Response.json(payload, { headers });
   } catch (err) {
     console.log(err);
-    let message = 'An unknown error occurred';
-    if (typeof err == 'string') message = err;
-    return new Response(message, {
-      status: 400,
-      headers,
-    });
+    const message = typeof err === 'string' ? err : 'An unknown error occurred';
+    return new Response(message, { status: 400, headers });
   }
 };
 
@@ -169,16 +160,16 @@ export const POST = async (req: Request) => {
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
 
-    // // Simulate the transaction to check for issues
-    // const simulationResult = await connection.simulateTransaction(transaction);
-    // console.log(simulationResult);
-    // if (simulationResult.value.err) {
-    //   console.error("Transaction simulation failed:", simulationResult.value.err);
-    //   return new Response(
-    //     JSON.stringify({ error: 'Transaction simulation failed' }),
-    //     { status: 400, headers }
-    //   );
-    // }
+    // Serialize transaction for debugging (size check)
+    const serializedTransaction = transaction.serialize();
+    console.log("Transaction size:", serializedTransaction.length);
+
+    if (serializedTransaction.length > 1232) {
+      return new Response(
+        JSON.stringify({ error: 'Transaction size exceeds limit' }),
+        { status: 400, headers }
+      );
+    }
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
@@ -188,9 +179,7 @@ export const POST = async (req: Request) => {
       },
     });
 
-    return Response.json(payload, {
-      headers,
-    });
+    return Response.json(payload, { headers });
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
