@@ -69,13 +69,23 @@ const ReviewAccountSize = 337; // Define the size of the review account in bytes
 
 export const POST = async (req: Request) => {
   try {
-    const body: ActionPostRequest = await req.json();
-    const account = body.account;
-
-    // Parse the query params from the request URL
+    // Extract the 'url' parameter first
     const requestUrl = new URL(req.url);
-    const ratingParam = requestUrl.searchParams.get('rating');
-    const reviewTextParam = requestUrl.searchParams.get('reviewText');
+    const encodedUrl = requestUrl.searchParams.get('url');
+
+    if (!encodedUrl) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required URL parameter' }),
+        { status: 400, headers }
+      );
+    }
+
+    // Decode the inner URL
+    const innerUrl = new URL(decodeURIComponent(encodedUrl));
+
+    // Extract rating and reviewText from the inner URL
+    const ratingParam = innerUrl.searchParams.get('rating');
+    const reviewTextParam = innerUrl.searchParams.get('reviewText');
 
     if (!ratingParam || !reviewTextParam) {
       return new Response(
@@ -94,9 +104,10 @@ export const POST = async (req: Request) => {
       );
     }
 
+    const body: ActionPostRequest = await req.json();
     let accountPubkey: PublicKey;
     try {
-      accountPubkey = new PublicKey(account);
+      accountPubkey = new PublicKey(body.account);
     } catch {
       return new Response(
         JSON.stringify({ error: 'Invalid "account" provided' }),
