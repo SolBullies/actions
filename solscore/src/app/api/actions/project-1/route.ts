@@ -11,6 +11,8 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
+  SystemProgram,
+  Keypair,
 } from '@solana/web3.js';
 
 // Create the standard headers for this route (including CORS)
@@ -20,7 +22,7 @@ const headers = createActionHeaders({
 });
 
 const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE');
-const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS');
+const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with the actual project public key
 
 export const GET = async () => {
   const payload: ActionGetResponse = {
@@ -66,18 +68,10 @@ export const OPTIONS = async () => {
 
 export const POST = async (req: Request) => {
   try {
-    // Read the ActionPostRequest body
     const body: ActionPostRequest = await req.json();
     const account = body.account;
 
-    if (!account) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required field: account' }),
-        { status: 400, headers },
-      );
-    }
-
-    // Retrieve rating and reviewText from URL query parameters
+    // Parse the query params from the request URL
     const requestUrl = new URL(req.url);
     const ratingParam = requestUrl.searchParams.get('rating');
     const reviewTextParam = requestUrl.searchParams.get('reviewText');
@@ -113,13 +107,18 @@ export const POST = async (req: Request) => {
       process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
     );
 
+    // Generate a new Keypair for the review, like in your test
+    const reviewKeypair = Keypair.generate();
+
+    // Get the latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
     const instruction = new TransactionInstruction({
-      programId: REVIEW_PROGRAM_ID,
+      programId: REVIEW_PROGRAM_ID, // Your review program
       keys: [
-        { pubkey: accountPubkey, isSigner: true, isWritable: true },
-        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false },
+        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // The review account
+        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // The user submitting the review
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System program
       ],
       data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'),
     });
@@ -130,13 +129,13 @@ export const POST = async (req: Request) => {
       lastValidBlockHeight,
     }).add(instruction);
 
-    // Log transaction details for debugging
-    console.log('Transaction:', transaction);
+    // Sign the transaction using the review keypair
+    transaction.partialSign(reviewKeypair);
 
-    // Pass the `Transaction` object directly to `createPostResponse`
+    // Create the post response with the transaction
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the `Transaction` object
+        transaction, // Pass the Transaction object
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
