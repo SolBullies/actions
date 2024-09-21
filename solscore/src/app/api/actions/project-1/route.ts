@@ -13,7 +13,6 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 
-// Create the standard headers for this route (including CORS)
 const headers = createActionHeaders({
   chainId: "devnet", // or chainId: "devnet"
   actionVersion: "2.2.1", // the desired spec version
@@ -32,7 +31,7 @@ export const GET = async () => {
     links: {
       actions: [
         {
-          href: '/api/actions/project-1', // This URL will include rating and reviewText as parameters
+          href: '/api/submit_review', // This URL will include rating and reviewText as parameters
           label: 'Submit Review',
           parameters: [
             {
@@ -73,10 +72,10 @@ export const POST = async (req: Request) => {
     const account = body.account;
 
     if (!account) {
-      return new Response('Missing required field: account', {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing required field: account' }),
+        { status: 400, headers },
+      );
     }
 
     // Now get rating and reviewText from the URL
@@ -85,10 +84,10 @@ export const POST = async (req: Request) => {
     const reviewTextParam = requestUrl.searchParams.get('reviewText');
 
     if (!ratingParam || !reviewTextParam) {
-      return new Response('Missing required parameters: rating or reviewText', {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters: rating or reviewText' }),
+        { status: 400, headers },
+      );
     }
 
     // Parse rating and reviewText
@@ -96,10 +95,10 @@ export const POST = async (req: Request) => {
     const reviewText = reviewTextParam;
 
     if (isNaN(rating) || rating < 1 || rating > 5) {
-      return new Response('Invalid "rating" provided', {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: 'Invalid "rating" provided' }),
+        { status: 400, headers },
+      );
     }
 
     // Validate account
@@ -107,10 +106,10 @@ export const POST = async (req: Request) => {
     try {
       accountPubkey = new PublicKey(account);
     } catch {
-      return new Response('Invalid "account" provided', {
-        status: 400,
-        headers,
-      });
+      return new Response(
+        JSON.stringify({ error: 'Invalid "account" provided' }),
+        { status: 400, headers },
+      );
     }
 
     // Create a connection to the Solana cluster (devnet or mainnet)
@@ -148,9 +147,9 @@ export const POST = async (req: Request) => {
 
   } catch (err) {
     console.error('Error in POST:', err);
-    return new Response('An error occurred during processing', {
-      status: 400,
-      headers,
-    });
+    return new Response(
+      JSON.stringify({ error: 'An error occurred during processing' }),
+      { status: 400, headers },
+    );
   }
 };
