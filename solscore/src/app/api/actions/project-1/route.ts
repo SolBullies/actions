@@ -126,8 +126,11 @@ export const POST = async (req: Request) => {
     console.log("Generated new reviewKeypair:", reviewKeypair.publicKey.toBase58());
 
     // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
+    let lamports = await connection.getMinimumBalanceForRentExemption(ReviewAccountSize);
     console.log("Calculated lamports for rent exemption:", lamports);
+
+    // Double the lamports to see if it resolves the issue
+    lamports = lamports * 2;
 
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey, // User who is paying for the account creation
