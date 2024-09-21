@@ -27,23 +27,23 @@ export const GET = async () => {
     title: 'Submit Review for Project 1',
     icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg', // Replace with a valid image URL
     description: 'Submit a review for Project 1',
-    label: 'Project 1',
+    label: 'Submit Review',
     links: {
       actions: [
         {
           href: '/api/actions/project-1',
-          label: 'Project 1',
+          label: 'Submit Review',
           parameters: [
             {
-              type: 'number', // Number input for ratings
+              type: 'number',
               name: 'rating',
               label: 'Rating (1-5)',
               required: true,
-              min: 1, // Set minimum rating
-              max: 5, // Set maximum rating
+              min: 1,
+              max: 5,
             },
             {
-              type: 'textarea', // Text area for review
+              type: 'textarea',
               name: 'reviewText',
               label: 'Write your review',
               required: true,
@@ -90,7 +90,6 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Parse rating and reviewText
     const rating = parseInt(ratingParam);
     const reviewText = reviewTextParam;
 
@@ -118,7 +117,7 @@ export const POST = async (req: Request) => {
     );
 
     // Fetch the recent blockhash
-    const { blockhash } = await connection.getLatestBlockhash();
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
     // Create a transaction instruction for the review program
     const instruction = new TransactionInstruction({
@@ -130,12 +129,20 @@ export const POST = async (req: Request) => {
       data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'),
     });
 
-    // Create the transaction
-    const transaction = new Transaction().add(instruction);
+    // Create the transaction and add the instruction
+    const transaction = new Transaction({
+      feePayer: accountPubkey,
+      blockhash,
+      lastValidBlockHeight,
+    }).add(instruction);
 
-    // Ensure the transaction has a recent blockhash and fee payer
-    transaction.feePayer = accountPubkey;
-    transaction.recentBlockhash = blockhash;
+    // Check that the transaction is constructed correctly
+    if (!transaction.instructions || transaction.instructions.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Transaction has no instructions' }),
+        { status: 400, headers },
+      );
+    }
 
     // Use createPostResponse to return a Blinks-compatible response
     const payload: ActionPostResponse = await createPostResponse({
@@ -145,11 +152,9 @@ export const POST = async (req: Request) => {
       },
     });
 
-    // Return the response
     return new Response(JSON.stringify(payload), {
       headers,
     });
-
   } catch (err) {
     console.error('Error in POST:', err);
     return new Response(
