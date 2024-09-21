@@ -129,13 +129,13 @@ export const POST = async (req: Request) => {
       lastValidBlockHeight,
     }).add(instruction);
 
-    // Sign the transaction using the review keypair
-    transaction.partialSign(reviewKeypair);
+    // Here, we ensure the transaction is fully signed
+    transaction.sign(reviewKeypair);
 
-    // Create the post response with the transaction
+    // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the Transaction object
+        transaction, // Pass the Transaction object directly
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
