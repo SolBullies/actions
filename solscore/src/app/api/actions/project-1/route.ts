@@ -1,30 +1,20 @@
 import {
-  // ActionPostResponse,
-  // createPostResponse,
   ActionGetResponse,
-  ActionPostRequest,
   createActionHeaders,
 } from '@solana/actions';
-// import {
-//   clusterApiUrl,
-//   Connection,
-//   PublicKey,
-//   Transaction,
-//   TransactionInstruction,
-// } from '@solana/web3.js';
 
 // Create the standard headers for this route (including CORS)
-const headers = createActionHeaders();
+const headers = createActionHeaders({
+  chainId: "devnet", // or chainId: "devnet"
+  actionVersion: "2.2.1", // the desired spec version
+});
 
-// Project-specific configuration (replace with your project's public key)
-// const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with the actual project public key
-// const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE'); // Replace with your review smart contract program ID
 
 // GET handler for the Action API (this is used for defining the input form)
 export const GET = async () => {
   const payload: ActionGetResponse = {
     title: 'Submit Review for Project',
-    icon: 'https://link-to-image.com/project_icon.jpg', // Replace with a valid image URL
+    icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg', // Replace with a valid image URL
     description: 'Submit a review for the specified project on-chain',
     label: 'Submit Review',
     links: {
@@ -66,21 +56,36 @@ export const OPTIONS = async () => {
 // POST handler for submitting the review on-chain
 export const POST = async (req: Request) => {
   try {
-    // Log the raw request body to inspect the structure
-    const body: ActionPostRequest = await req.json();
+    // Read the raw request body as plain text
+    const rawBody = await req.text();
+
+    // Check if the request body exists
+    if (!rawBody) {
+      return new Response('Request body is empty', {
+        status: 400,
+        headers,
+      });
+    }
+
+    // Parse the raw body into JSON format
+    const body = JSON.parse(rawBody);
+
+    // Log the received request body for debugging purposes
     console.log('Received ActionPostRequest body:', JSON.stringify(body, null, 2));
 
-    // From here, you can explore what the body contains
-    // Once we know the structure, we can adjust the rest of the code
+    // Log the account and any inputs for debugging
+    console.log('Account:', body.account);
+    console.log('Inputs:', body.inputs);
 
-    // For now, return a placeholder response
-    return new Response('Body logged. Please check the logs.', {
+    // If you want, you can also return the body in the response for easier testing
+    return new Response(JSON.stringify({ receivedBody: body }), {
       status: 200,
       headers,
     });
+
   } catch (err) {
     console.error('Error in POST:', err);
-    return new Response('An error occurred', {
+    return new Response('An error occurred during processing', {
       status: 400,
       headers,
     });
