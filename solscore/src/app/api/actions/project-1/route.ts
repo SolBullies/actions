@@ -1,5 +1,8 @@
 import {
   ActionPostResponse,
+  createPostResponse,
+  ActionGetResponse,
+  ActionPostRequest,
   createActionHeaders,
 } from '@solana/actions';
 import {
@@ -10,37 +13,38 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 
+// Create the standard headers for this route (including CORS)
 const headers = createActionHeaders({
   chainId: "devnet", // or chainId: "devnet"
   actionVersion: "2.2.1", // the desired spec version
 });
 
 const REVIEW_PROGRAM_ID = new PublicKey('HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE');
-const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'); // Replace with your project's public key
+const PROJECT_PUBLIC_KEY = new PublicKey('FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS');
 
-// GET handler (the structure for the form inputs)
+// GET handler for the Action API (this is used for defining the input form)
 export const GET = async () => {
-  const payload = {
+  const payload: ActionGetResponse = {
     title: 'Submit Review for Project',
-    icon: 'https://link-to-image.com/project_icon.jpg', // Replace with a valid image URL
+    icon: 'https://ucarecdn.com/d08d3b6b-e068-4d78-b02f-30d91c1fb74c/examplemandahansen.jpg', // Replace with a valid image URL
     description: 'Submit a review for the specified project on-chain',
     label: 'Submit Review',
     links: {
       actions: [
         {
-          href: '/api/actions/project-1',
+          href: '/api/actions/project-1', // This URL will include rating and reviewText as parameters
           label: 'Submit Review',
           parameters: [
             {
-              type: 'number', // Rating field (1-5)
+              type: 'number', // Number input for ratings
               name: 'rating',
               label: 'Rating (1-5)',
               required: true,
-              min: 1,
-              max: 5,
+              min: 1, // Set minimum rating
+              max: 5, // Set maximum rating
             },
             {
-              type: 'textarea', // Review text field
+              type: 'textarea', // Text area for review
               name: 'reviewText',
               label: 'Write your review',
               required: true,
@@ -51,97 +55,102 @@ export const GET = async () => {
     },
   };
 
-  return new Response(JSON.stringify(payload), { headers });
+  return new Response(JSON.stringify(payload), {
+    headers,
+  });
 };
 
-// Handle OPTIONS for CORS support
+// Handle OPTIONS request for CORS
 export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
-// POST handler for submitting review on-chain, reading rating/reviewText from query parameters
+// POST handler for submitting the review on-chain
 export const POST = async (req: Request) => {
   try {
-    const requestUrl = new URL(req.url);
-    const { rating, reviewText, account } = validatedQueryParams(requestUrl); // Fetch from URL query params
+    // Get account from ActionPostRequest (the POST request body)
+    const body: ActionPostRequest = await req.json();
+    const account = body.account;
 
+    if (!account) {
+      return new Response('Missing required field: account', {
+        status: 400,
+        headers,
+      });
+    }
+
+    // Now get rating and reviewText from the URL
+    const requestUrl = new URL(req.url);
+    const ratingParam = requestUrl.searchParams.get('rating');
+    const reviewTextParam = requestUrl.searchParams.get('reviewText');
+
+    if (!ratingParam || !reviewTextParam) {
+      return new Response('Missing required parameters: rating or reviewText', {
+        status: 400,
+        headers,
+      });
+    }
+
+    // Parse rating and reviewText
+    const rating = parseInt(ratingParam);
+    const reviewText = reviewTextParam;
+
+    if (isNaN(rating) || rating < 1 || rating > 5) {
+      return new Response('Invalid "rating" provided', {
+        status: 400,
+        headers,
+      });
+    }
+
+    // Validate account
     let accountPubkey: PublicKey;
     try {
       accountPubkey = new PublicKey(account);
     } catch {
-      return new Response('Invalid "account" provided', { status: 400, headers });
+      return new Response('Invalid "account" provided', {
+        status: 400,
+        headers,
+      });
     }
 
-    // Validate rating and reviewText
-    if (!rating || !reviewText) {
-      return new Response('Both rating and reviewText are required', { status: 400, headers });
-    }
-
-    // Solana connection (devnet or mainnet)
+    // Create a connection to the Solana cluster (devnet or mainnet)
     const connection = new Connection(
       process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
     );
 
     // Create a transaction instruction for the review program
     const instruction = new TransactionInstruction({
-      programId: REVIEW_PROGRAM_ID, // Smart contract program ID for handling reviews
+      programId: REVIEW_PROGRAM_ID,
       keys: [
-        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // The user submitting the review
-        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false }, // The project for the review
+        { pubkey: accountPubkey, isSigner: true, isWritable: true },
+        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false },
       ],
-      data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'), // Serialize the review data
+      data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf8'),
     });
 
+    // Create the transaction
     const transaction = new Transaction().add(instruction);
     transaction.feePayer = accountPubkey;
     transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-    // Create the ActionPostResponse with the transaction
-    const payload: ActionPostResponse = {
-      transaction: transaction.serialize({ verifySignatures: false }).toString('base64'), // Base64-encoded transaction
-      message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
-    };
+    // Use createPostResponse to return a Blinks-compatible response
+    const payload: ActionPostResponse = await createPostResponse({
+      fields: {
+        transaction,
+        message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
+      },
+    });
 
-    return new Response(JSON.stringify(payload), { headers });
+    // Return the response
+    return new Response(JSON.stringify(payload), {
+      headers,
+    });
+
   } catch (err) {
     console.error('Error in POST:', err);
-    return new Response('An error occurred during processing', { status: 400, headers });
+    return new Response('An error occurred during processing', {
+      status: 400,
+      headers,
+    });
   }
 };
-
-// Helper function to validate and extract query parameters
-function validatedQueryParams(requestUrl: URL) {
-  let rating: number = 0;
-  let reviewText: string = '';
-  let account: string = '';
-
-  try {
-    if (requestUrl.searchParams.get('rating')) {
-      rating = parseInt(requestUrl.searchParams.get('rating')!);
-    }
-  } catch {
-    throw 'Invalid input query parameter: rating';
-  }
-
-  try {
-    if (requestUrl.searchParams.get('reviewText')) {
-      reviewText = requestUrl.searchParams.get('reviewText')!;
-    }
-  } catch {
-    throw 'Invalid input query parameter: reviewText';
-  }
-
-  try {
-    if (requestUrl.searchParams.get('account')) {
-      account = requestUrl.searchParams.get('account')!;
-    }
-  } catch {
-    throw 'Invalid input query parameter: account';
-  }
-
-  return {
-    rating,
-    reviewText,
-    account,
-  };
-}
