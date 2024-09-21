@@ -161,15 +161,15 @@ export const POST = async (req: Request) => {
     }).add(createAccountInstruction, submitReviewInstruction);
 
     // Serialize transaction for debugging (size check)
-    const serializedTransaction = transaction.serialize();
-    console.log("Transaction size:", serializedTransaction.length);
+    // const serializedTransaction = transaction.serialize();
+    // console.log("Transaction size:", serializedTransaction.length);
 
-    if (serializedTransaction.length > 1232) {
-      return new Response(
-        JSON.stringify({ error: 'Transaction size exceeds limit' }),
-        { status: 400, headers }
-      );
-    }
+    // if (serializedTransaction.length > 1232) {
+    //   return new Response(
+    //     JSON.stringify({ error: 'Transaction size exceeds limit' }),
+    //     { status: 400, headers }
+    //   );
+    // }
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
