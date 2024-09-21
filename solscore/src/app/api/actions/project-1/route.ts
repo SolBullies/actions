@@ -9,13 +9,11 @@ import {
   clusterApiUrl,
   Connection,
   PublicKey,
+  Keypair,
   Transaction,
   TransactionInstruction,
-  ComputeBudgetProgram,
-  SystemProgram,
 } from '@solana/web3.js';
 
-// Create the standard headers for this route (including CORS)
 const headers = createActionHeaders({
   chainId: "devnet", // or chainId: "devnet"
   actionVersion: "2.2.1", // the desired spec version
@@ -66,7 +64,6 @@ export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
-// POST handler for submitting the review on-chain
 export const POST = async (req: Request) => {
   try {
     const body: ActionPostRequest = await req.json();
@@ -80,7 +77,7 @@ export const POST = async (req: Request) => {
     if (!ratingParam || !reviewTextParam) {
       return new Response(
         JSON.stringify({ error: 'Missing required parameters: rating or reviewText' }),
-        { status: 400, headers },
+        { status: 400, headers }
       );
     }
 
@@ -90,7 +87,7 @@ export const POST = async (req: Request) => {
     if (isNaN(rating) || rating < 1 || rating > 5) {
       return new Response(
         JSON.stringify({ error: 'Invalid "rating" provided' }),
-        { status: 400, headers },
+        { status: 400, headers }
       );
     }
 
@@ -100,36 +97,52 @@ export const POST = async (req: Request) => {
     } catch {
       return new Response(
         JSON.stringify({ error: 'Invalid "account" provided' }),
-        { status: 400, headers },
+        { status: 400, headers }
       );
     }
 
     const connection = new Connection(
-      process.env.SOLANA_RPC! || clusterApiUrl('devnet'),
+      process.env.SOLANA_RPC! || clusterApiUrl('devnet')
     );
 
-    // Create a transaction with the necessary instructions
-    const transaction = new Transaction().add(
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }), // Adds compute budget instruction
-      new TransactionInstruction({
-        programId: REVIEW_PROGRAM_ID, // Your review submission program
-        keys: [
-          { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User account
-          { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false }, // Project account
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // System Program
-        ],
-        data: Buffer.from(JSON.stringify({ rating, reviewText }), 'utf-8'), // Serialize review data
-      }),
-    );
+    // Generate a new Keypair for the review
+    const reviewKeypair = Keypair.generate();
 
-    // Set the end user as the fee payer
-    transaction.feePayer = accountPubkey;
-    transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+    // Create the instruction for submitting a review
+    const submitReviewInstruction = new TransactionInstruction({
+      keys: [
+        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review account
+        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User submitting the review
+        { pubkey: PROJECT_PUBLIC_KEY, isSigner: false, isWritable: false }, // The project being reviewed
+        { pubkey: PublicKey.default, isSigner: false, isWritable: false }, // System Program (should be added correctly)
+      ],
+      programId: REVIEW_PROGRAM_ID, // Review program on Solana
+      data: Buffer.from(JSON.stringify({ rating, reviewText })), // Convert the review data to a buffer
+    });
+
+    // Get the latest blockhash and create the transaction
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+
+    // Create a transaction with blockhash and feePayer details
+    const transaction = new Transaction({
+      feePayer: accountPubkey,
+      blockhash,
+      lastValidBlockHeight,
+    }).add(submitReviewInstruction);
+
+    // You can also create a versioned transaction as an alternative:
+    // const transaction = new VersionedTransaction(
+    //   new TransactionMessage({
+    //     payerKey: accountPubkey,
+    //     recentBlockhash: blockhash,
+    //     instructions: [submitReviewInstruction],
+    //   }).compileToV0Message(),
+    // );
 
     // Create the post response with the transaction data
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the Transaction object directly
+        transaction,
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
@@ -141,7 +154,7 @@ export const POST = async (req: Request) => {
     console.error('Error in POST:', err);
     return new Response(
       JSON.stringify({ error: 'An error occurred during processing' }),
-      { status: 400, headers },
+      { status: 400, headers }
     );
   }
 };
