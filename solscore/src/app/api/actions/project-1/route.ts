@@ -69,7 +69,7 @@ const ReviewAccountSize = 337; // Define the size of the review account in bytes
 
 export const POST = async (req: Request) => {
   try {
-    // Extract the 'url' parameter first
+    // Step 1: Extract the 'url' parameter first
     const requestUrl = new URL(req.url);
     const encodedUrl = requestUrl.searchParams.get('url');
 
@@ -80,10 +80,11 @@ export const POST = async (req: Request) => {
       );
     }
 
-    // Decode the inner URL
-    const innerUrl = new URL(decodeURIComponent(encodedUrl));
+    // Step 2: Decode the inner URL
+    const decodedUrl = decodeURIComponent(encodedUrl);
+    const innerUrl = new URL(decodedUrl);
 
-    // Extract rating and reviewText from the inner URL
+    // Step 3: Extract rating and reviewText from the inner URL
     const ratingParam = innerUrl.searchParams.get('rating');
     const reviewTextParam = innerUrl.searchParams.get('reviewText');
 
@@ -104,6 +105,7 @@ export const POST = async (req: Request) => {
       );
     }
 
+    // Step 4: Parse the body of the POST request (account)
     const body: ActionPostRequest = await req.json();
     let accountPubkey: PublicKey;
     try {
