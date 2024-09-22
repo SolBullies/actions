@@ -126,7 +126,7 @@ export const POST = async (req: Request) => {
     const reviewKeypair = Keypair.generate();
 
     // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(128);
+    const lamports = await connection.getMinimumBalanceForRentExemption(128) * 5;
 
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey,
