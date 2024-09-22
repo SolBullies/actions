@@ -119,7 +119,7 @@ export const POST = async (req: Request) => {
     }
 
     const connection = new Connection(
-      process.env.SOLANA_RPC! || clusterApiUrl('devnet')
+      clusterApiUrl('devnet')
     );
 
     // Generate a new Keypair for the review
