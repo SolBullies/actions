@@ -132,7 +132,7 @@ export const POST = async (req: Request) => {
       fromPubkey: accountPubkey,
       newAccountPubkey: reviewKeypair.publicKey,
       lamports,
-      space: 128,
+      space: 128 * 5,
       programId: REVIEW_PROGRAM_ID,
     });
 
