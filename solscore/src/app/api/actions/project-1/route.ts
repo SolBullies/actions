@@ -138,7 +138,7 @@ export const POST = async (req: Request) => {
 
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: false, isWritable: true },
+        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review keypair must sign!
         { pubkey: accountPubkey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
@@ -161,12 +161,18 @@ export const POST = async (req: Request) => {
     }).add(createAccountInstruction, submitReviewInstruction);
 
     // Create the post response with the transaction data
-    const payload: ActionPostResponse = await createPostResponse({
+    const postResponse: ActionPostResponse = await createPostResponse({
       fields: {
         transaction, // Pass the Transaction object directly
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
+
+    // Manually add the reviewKeypair public key to the payload
+    const payload = {
+      ...postResponse,
+      reviewKeypairPublicKey: reviewKeypair.publicKey.toBase58(), // Include the public key
+    };
 
     return Response.json(payload, { headers });
   } catch (err) {
