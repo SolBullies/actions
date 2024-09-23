@@ -125,69 +125,56 @@ export const POST = async (req: Request) => {
       REVIEW_PROGRAM_ID
     );
 
-    // Check for sufficient funds
-    const balance = await connection.getBalance(accountPubkey);
-    console.log("Wallet balance:", balance);
-
-    if (balance < 0.001 * 1e9) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient funds' }),
-        { status: 400, headers }
-      );
-    }
-
     // Calculate rent exemption for the review account
     const lamports = await connection.getMinimumBalanceForRentExemption(128);
 
-    // Create account instruction (PDA)
-    const createAccountInstruction = SystemProgram.createAccount({
-      fromPubkey: accountPubkey,
-      newAccountPubkey: reviewPDA,
-      lamports,
-      space: 128,
-      programId: REVIEW_PROGRAM_ID,
-    });
-
-    console.log("PDA creation instruction:", createAccountInstruction);
-
-    // Submit the review
-    const submitReviewInstruction = new TransactionInstruction({
-      keys: [
-        { pubkey: reviewPDA, isSigner: false, isWritable: true }, // Review PDA does not need to be a signer
-        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User's account must be a signer
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-      ],
-      programId: REVIEW_PROGRAM_ID,
-      data: Buffer.concat([
-        PROJECT_PUBLIC_KEY.toBuffer(),
-        Buffer.from([rating]),
-        Buffer.from(reviewText, 'utf8'),
-      ]),
-    });
-
-    console.log("Submit review instruction:", submitReviewInstruction);
-
-    // Get the latest blockhash and last valid block height
+    // Fetch the latest blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create transaction and add instructions
+    // Create the transaction
     const transaction = new Transaction({
-      feePayer: accountPubkey,
+      feePayer: accountPubkey, // The fee payer is the user's public key
       blockhash,
       lastValidBlockHeight,
-    }).add(createAccountInstruction, submitReviewInstruction);
+    });
+
+    // Add instructions to create the account (PDA) and submit the review
+    transaction.add(
+      SystemProgram.createAccount({
+        fromPubkey: accountPubkey,
+        newAccountPubkey: reviewPDA,
+        lamports,
+        space: 128,
+        programId: REVIEW_PROGRAM_ID,
+      })
+    );
+
+    transaction.add(
+      new TransactionInstruction({
+        keys: [
+          { pubkey: reviewPDA, isSigner: false, isWritable: true }, // Review PDA does not need to be a signer
+          { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User's account must be a signer
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        programId: REVIEW_PROGRAM_ID,
+        data: Buffer.concat([
+          PROJECT_PUBLIC_KEY.toBuffer(),
+          Buffer.from([rating]),
+          Buffer.from(reviewText, 'utf8'),
+        ]),
+      })
+    );
 
     console.log("Transaction prepared:", transaction);
 
-    // Create the post response with the transaction data, return to Blink for signing
+    // Create the post response with the prepared transaction data for Blink to handle signing
     const postResponse: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the Transaction object to be signed by Phantom via Blink
+        transaction, // Pass the Transaction object to Blink for signing
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
 
-    // Return the prepared transaction to be signed
     return Response.json(postResponse, { headers });
   } catch (err) {
     console.error('Error in POST:', err);
