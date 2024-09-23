@@ -127,9 +127,9 @@ export const POST = async (req: Request) => {
 
     // Check for sufficient funds
     const balance = await connection.getBalance(accountPubkey);
-    console.log("Balance:", balance);
+    console.log("Wallet balance:", balance);
 
-    if (balance < 0.001 * 1e9) { // Adjust this limit as needed based on required SOL
+    if (balance < 0.001 * 1e9) {
       return new Response(
         JSON.stringify({ error: 'Insufficient funds' }),
         { status: 400, headers }
@@ -139,18 +139,22 @@ export const POST = async (req: Request) => {
     // Calculate rent exemption for the review account
     const lamports = await connection.getMinimumBalanceForRentExemption(128);
 
+    // Create account instruction (PDA)
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey,
-      newAccountPubkey: reviewPDA, // Use the PDA instead of a keypair
+      newAccountPubkey: reviewPDA,
       lamports,
-      space: 128, // Allocate enough space for the review
+      space: 128,
       programId: REVIEW_PROGRAM_ID,
     });
 
+    console.log("PDA creation instruction:", createAccountInstruction);
+
+    // Submit the review
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
         { pubkey: reviewPDA, isSigner: false, isWritable: true }, // Review PDA does not need to be a signer
-        { pubkey: accountPubkey, isSigner: true, isWritable: true },
+        { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User's account must be a signer
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       programId: REVIEW_PROGRAM_ID,
@@ -161,10 +165,12 @@ export const POST = async (req: Request) => {
       ]),
     });
 
-    // Get latest blockhash and last valid block height
+    console.log("Submit review instruction:", submitReviewInstruction);
+
+    // Get the latest blockhash and last valid block height
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
 
-    // Create transaction
+    // Create transaction and add instructions
     const transaction = new Transaction({
       feePayer: accountPubkey,
       blockhash,
@@ -173,25 +179,19 @@ export const POST = async (req: Request) => {
 
     console.log("Transaction prepared:", transaction);
 
-    // Create the post response with the transaction data
+    // Create the post response with the transaction data, return to Blink for signing
     const postResponse: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the Transaction object directly
+        transaction, // Pass the Transaction object to be signed by Phantom via Blink
         message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
       },
     });
 
-    // Manually add the review PDA to the payload
-    const payload = {
-      ...postResponse,
-      reviewPDA: reviewPDA.toBase58(), // Include the PDA in the response
-    };
-
-    return Response.json(payload, { headers });
+    // Return the prepared transaction to be signed
+    return Response.json(postResponse, { headers });
   } catch (err) {
     console.error('Error in POST:', err);
 
-    // Return the specific error to help identify the cause
     return new Response(
       JSON.stringify({
         error: `An error occurred during processing: ${
