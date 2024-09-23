@@ -9,13 +9,13 @@ import {
   clusterApiUrl,
   Connection,
   PublicKey,
-  Transaction
+  Transaction,
 } from '@solana/web3.js';
 import * as anchor from '@coral-xyz/anchor';
 
 const headers = createActionHeaders({
-  chainId: "devnet",
-  actionVersion: "2.2.1",
+  chainId: "devnet", // Ensure the correct chain is set
+  actionVersion: "2.2.1", // Set the correct action version
 });
 
 const REVIEW_PROGRAM_ID = new PublicKey('3avu7LSQhwJeZywCPwFcFMWtFJuHHumYQnWGWMLMWH3B');
@@ -72,21 +72,40 @@ export const GET = async (req: Request) => {
       },
     };
 
-    return Response.json(payload, { headers });
+    return new Response(JSON.stringify(payload), {
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*', // Enable CORS
+      },
+    });
   } catch (err) {
     console.log(err);
     const message = typeof err === 'string' ? err : 'An unknown error occurred';
-    return new Response(message, { status: 400, headers });
+    return new Response(JSON.stringify({ error: message }), {
+      status: 400,
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*', // Enable CORS
+      },
+    });
   }
 };
 
 // Handle OPTIONS request for CORS
 export const OPTIONS = async () => {
-  return new Response(null, { headers });
+  return new Response(null, {
+    headers: {
+      ...headers,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Action-Version, X-Blockchain-Ids',
+    },
+  });
 };
 
-// POST handler with Anchor program interaction (aligned with ActionPostResponse)
-// POST handler with Anchor program interaction (aligned with ActionPostResponse)
+// POST handler with Anchor program interaction
 export const POST = async (req: Request) => {
   try {
     // Parse the request body
@@ -134,12 +153,15 @@ export const POST = async (req: Request) => {
       },
     });
 
-    return Response.json(payload, {
-      headers,
+    return new Response(JSON.stringify(payload), {
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*', // Enable CORS
+      },
     });
-
   } catch (err) {
-    console.error('An error occurred:', err); // Log the error for debugging
+    console.error('An error occurred:', err);
 
     // Return a proper JSON error response
     return new Response(
@@ -148,7 +170,11 @@ export const POST = async (req: Request) => {
       }),
       {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*', // Enable CORS
+        },
       }
     );
   }
