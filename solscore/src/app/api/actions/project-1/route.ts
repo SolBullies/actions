@@ -18,7 +18,7 @@ const headers = createActionHeaders({
   actionVersion: "2.2.1",
 });
 
-const REVIEW_PROGRAM_ID = new PublicKey('H8UL9huVgs3Ez3CRKJh771gtbTHEu633dhFfKc8aCvFr');
+const REVIEW_PROGRAM_ID = new PublicKey('3avu7LSQhwJeZywCPwFcFMWtFJuHHumYQnWGWMLMWH3B');
 
 function validatedQueryParams(requestUrl: URL) {
   const rating = requestUrl.searchParams.get('rating');
@@ -113,7 +113,7 @@ export const POST = async (req: Request) => {
 
     // Await the instruction since it returns a Promise
     const instruction = await program.methods
-      .submitReview('PROJECT_PUBLIC_KEY', rating, reviewText) // Pass project public key as input, not an account
+      .submitReview('BBb3Nagqg7iMuuZq3BM3yYUNURPcUSm7TGPLg5dVosyL', rating, reviewText) // Pass project public key as input, not an account
       .accounts({
         review: reviewKeypair.publicKey,
         user: provider.wallet.publicKey,
