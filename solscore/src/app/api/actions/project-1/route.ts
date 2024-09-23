@@ -97,10 +97,9 @@ export const GET = async (req: Request) => {
 export const OPTIONS = async () => {
   return new Response(null, {
     headers: {
-      ...headers,
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Action-Version, X-Blockchain-Ids',
+      'Access-Control-Allow-Origin': '*', // Allows all origins
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', // Allowed methods
+      'Access-Control-Allow-Headers': 'Content-Type, X-Action-Version, X-Blockchain-Ids', // Allowed headers
     },
   });
 };
