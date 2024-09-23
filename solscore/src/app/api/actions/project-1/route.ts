@@ -9,7 +9,6 @@ import {
   clusterApiUrl,
   Connection,
   PublicKey,
-  Keypair,
   Transaction,
   TransactionInstruction,
   SystemProgram,
@@ -21,10 +20,10 @@ const headers = createActionHeaders({
 });
 
 const REVIEW_PROGRAM_ID = new PublicKey(
-  'HahXGYW8GUUJSvnYRgj7LaHuvLcUhhz71tbRgX6aDPuE'
+  'H8UL9huVgs3Ez3CRKJh771gtbTHEu633dhFfKc8aCvFr'
 );
 const PROJECT_PUBLIC_KEY = new PublicKey(
-  'FeV4wbe9PTyQZZJhPbKf1qvMZTJZe4QLqPBR4HbtNLBS'
+  'C8LjSYdNaj4txJLpHEdu6S7B42kZAejWNZ5ULeQzQCco'
 );
 
 function validatedQueryParams(requestUrl: URL) {
@@ -122,23 +121,26 @@ export const POST = async (req: Request) => {
       clusterApiUrl('devnet')
     );
 
-    // Generate a new Keypair for the review
-    const reviewKeypair = Keypair.generate();
+    // Derive the PDA for the review account based on the seeds used in the smart contract
+    const [reviewPDA] = await PublicKey.findProgramAddress(
+      [Buffer.from('review'), PROJECT_PUBLIC_KEY.toBuffer(), accountPubkey.toBuffer()],
+      REVIEW_PROGRAM_ID
+    );
 
     // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(128) * 5;
+    const lamports = await connection.getMinimumBalanceForRentExemption(128);
 
     const createAccountInstruction = SystemProgram.createAccount({
       fromPubkey: accountPubkey,
-      newAccountPubkey: reviewKeypair.publicKey,
+      newAccountPubkey: reviewPDA, // Use the PDA instead of a keypair
       lamports,
-      space: 128 * 5,
+      space: 128, // Allocate enough space for the review
       programId: REVIEW_PROGRAM_ID,
     });
 
     const submitReviewInstruction = new TransactionInstruction({
       keys: [
-        { pubkey: reviewKeypair.publicKey, isSigner: true, isWritable: true }, // Review keypair must sign!
+        { pubkey: reviewPDA, isSigner: false, isWritable: true }, // Review PDA does not need to be a signer
         { pubkey: accountPubkey, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
@@ -168,10 +170,10 @@ export const POST = async (req: Request) => {
       },
     });
 
-    // Manually add the reviewKeypair public key to the payload
+    // Manually add the review PDA to the payload
     const payload = {
       ...postResponse,
-      reviewKeypairPublicKey: reviewKeypair.publicKey.toBase58(), // Include the public key
+      reviewPDA: reviewPDA.toBase58(), // Include the PDA in the response
     };
 
     return Response.json(payload, { headers });
