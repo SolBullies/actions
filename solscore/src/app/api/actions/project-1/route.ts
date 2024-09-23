@@ -86,6 +86,7 @@ export const OPTIONS = async () => {
 };
 
 // POST handler with Anchor program interaction (aligned with ActionPostResponse)
+// POST handler with Anchor program interaction (aligned with ActionPostResponse)
 export const POST = async (req: Request) => {
   try {
     // Parse the request body
@@ -111,7 +112,7 @@ export const POST = async (req: Request) => {
     // Generate a new keypair for the review account
     const reviewKeypair = anchor.web3.Keypair.generate();
 
-    // Await the instruction since it returns a Promise
+    // Create the transaction instruction to submit the review
     const instruction = await program.methods
       .submitReview('BBb3Nagqg7iMuuZq3BM3yYUNURPcUSm7TGPLg5dVosyL', rating, reviewText) // Pass project public key as input, not an account
       .accounts({
@@ -125,7 +126,6 @@ export const POST = async (req: Request) => {
     // Create the transaction and add the awaited instruction
     const transaction = new Transaction().add(instruction);
 
-
     // Prepare the response payload with the serialized transaction
     const payload: ActionPostResponse = await createPostResponse({
       fields: {
@@ -137,9 +137,19 @@ export const POST = async (req: Request) => {
     return Response.json(payload, {
       headers,
     });
+
   } catch (err) {
-    console.error(err);
-    const message = typeof err === 'string' ? err : 'An unknown error occurred';
-    return new Response(message, { status: 400, headers });
+    console.error('An error occurred:', err); // Log the error for debugging
+
+    // Return a proper JSON error response
+    return new Response(
+      JSON.stringify({
+        error: typeof err === 'string' ? err : 'An unknown error occurred',
+      }),
+      {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
 };
