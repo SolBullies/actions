@@ -9,22 +9,16 @@ import {
   clusterApiUrl,
   Connection,
   PublicKey,
-  Transaction,
-  TransactionInstruction,
-  SystemProgram,
+  Transaction
 } from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
 
 const headers = createActionHeaders({
   chainId: "devnet",
   actionVersion: "2.2.1",
 });
 
-const REVIEW_PROGRAM_ID = new PublicKey(
-  'H8UL9huVgs3Ez3CRKJh771gtbTHEu633dhFfKc8aCvFr'
-);
-const PROJECT_PUBLIC_KEY = new PublicKey(
-  'C8LjSYdNaj4txJLpHEdu6S7B42kZAejWNZ5ULeQzQCco'
-);
+const REVIEW_PROGRAM_ID = new PublicKey('H8UL9huVgs3Ez3CRKJh771gtbTHEu633dhFfKc8aCvFr');
 
 function validatedQueryParams(requestUrl: URL) {
   const rating = requestUrl.searchParams.get('rating');
@@ -91,101 +85,61 @@ export const OPTIONS = async () => {
   return new Response(null, { headers });
 };
 
-// POST handler with proper Transaction object
+// POST handler with Anchor program interaction (aligned with ActionPostResponse)
 export const POST = async (req: Request) => {
   try {
+    // Parse the request body
     const body: ActionPostRequest = await req.json();
-    const account = body.account;
+    const account = new PublicKey(body.account); // User's public key from the ActionPostRequest
 
     const requestUrl = new URL(req.url);
     const { rating, reviewText } = validatedQueryParams(requestUrl);
 
-    if (isNaN(rating) || rating < 1 || rating > 5) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid "rating" provided' }),
-        { status: 400, headers }
-      );
-    }
-
-    let accountPubkey: PublicKey;
-    try {
-      accountPubkey = new PublicKey(account);
-    } catch {
-      return new Response(
-        JSON.stringify({ error: 'Invalid "account" provided' }),
-        { status: 400, headers }
-      );
-    }
-
+    // Set up Solana connection and provider
     const connection = new Connection(clusterApiUrl('devnet'));
+    const provider = new anchor.AnchorProvider(connection, { publicKey: account } as anchor.Wallet, {});
 
-    // Derive the PDA for the review account based on the seeds used in the smart contract
-    const [reviewPDA] = await PublicKey.findProgramAddress(
-      [Buffer.from('review'), PROJECT_PUBLIC_KEY.toBuffer(), accountPubkey.toBuffer()],
-      REVIEW_PROGRAM_ID
-    );
+    anchor.setProvider(provider);
 
-    // Calculate rent exemption for the review account
-    const lamports = await connection.getMinimumBalanceForRentExemption(128);
+    // Load the program using the IDL and the program ID
+    const idl = await anchor.Program.fetchIdl(REVIEW_PROGRAM_ID, provider);
+    if (!idl) {
+      throw new Error('IDL not found');
+    }
+    const program = new anchor.Program(idl, provider);
 
-    // Fetch the latest blockhash
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    // Generate a new keypair for the review account
+    const reviewKeypair = anchor.web3.Keypair.generate();
 
-    // Create the transaction
-    const transaction = new Transaction({
-      feePayer: accountPubkey, // The fee payer is the user's public key
-      blockhash,
-      lastValidBlockHeight,
-    });
-
-    // Add instructions to create the account (PDA) and submit the review
-    transaction.add(
-      SystemProgram.createAccount({
-        fromPubkey: accountPubkey,
-        newAccountPubkey: reviewPDA,
-        lamports,
-        space: 128,
-        programId: REVIEW_PROGRAM_ID,
+    // Await the instruction since it returns a Promise
+    const instruction = await program.methods
+      .submitReview('PROJECT_PUBLIC_KEY', rating, reviewText) // Pass project public key as input, not an account
+      .accounts({
+        review: reviewKeypair.publicKey,
+        user: provider.wallet.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
-    );
+      .signers([reviewKeypair])
+      .instruction(); // Await the instruction
 
-    transaction.add(
-      new TransactionInstruction({
-        keys: [
-          { pubkey: reviewPDA, isSigner: false, isWritable: true }, // Review PDA does not need to be a signer
-          { pubkey: accountPubkey, isSigner: true, isWritable: true }, // User's account must be a signer
-          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        ],
-        programId: REVIEW_PROGRAM_ID,
-        data: Buffer.concat([
-          PROJECT_PUBLIC_KEY.toBuffer(),
-          Buffer.from([rating]),
-          Buffer.from(reviewText, 'utf8'),
-        ]),
-      })
-    );
+    // Create the transaction and add the awaited instruction
+    const transaction = new Transaction().add(instruction);
 
-    console.log("Transaction prepared:", transaction);
 
-    // Create the post response with the prepared transaction data for Blink to handle signing
-    const postResponse: ActionPostResponse = await createPostResponse({
+    // Prepare the response payload with the serialized transaction
+    const payload: ActionPostResponse = await createPostResponse({
       fields: {
-        transaction, // Pass the Transaction object to Blink for signing
-        message: `Submit review for project: ${PROJECT_PUBLIC_KEY.toString()}`,
+        transaction,
+        message: "Submit this transaction to complete your review submission.",
       },
     });
 
-    return Response.json(postResponse, { headers });
+    return Response.json(payload, {
+      headers,
+    });
   } catch (err) {
-    console.error('Error in POST:', err);
-
-    return new Response(
-      JSON.stringify({
-        error: `An error occurred during processing: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      }),
-      { status: 400, headers }
-    );
+    console.error(err);
+    const message = typeof err === 'string' ? err : 'An unknown error occurred';
+    return new Response(message, { status: 400, headers });
   }
 };
