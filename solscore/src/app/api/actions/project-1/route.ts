@@ -117,15 +117,24 @@ export const POST = async (req: Request) => {
       );
     }
 
-    const connection = new Connection(
-      clusterApiUrl('devnet')
-    );
+    const connection = new Connection(clusterApiUrl('devnet'));
 
     // Derive the PDA for the review account based on the seeds used in the smart contract
     const [reviewPDA] = await PublicKey.findProgramAddress(
       [Buffer.from('review'), PROJECT_PUBLIC_KEY.toBuffer(), accountPubkey.toBuffer()],
       REVIEW_PROGRAM_ID
     );
+
+    // Check for sufficient funds
+    const balance = await connection.getBalance(accountPubkey);
+    console.log("Balance:", balance);
+
+    if (balance < 0.001 * 1e9) { // Adjust this limit as needed based on required SOL
+      return new Response(
+        JSON.stringify({ error: 'Insufficient funds' }),
+        { status: 400, headers }
+      );
+    }
 
     // Calculate rent exemption for the review account
     const lamports = await connection.getMinimumBalanceForRentExemption(128);
@@ -162,6 +171,8 @@ export const POST = async (req: Request) => {
       lastValidBlockHeight,
     }).add(createAccountInstruction, submitReviewInstruction);
 
+    console.log("Transaction prepared:", transaction);
+
     // Create the post response with the transaction data
     const postResponse: ActionPostResponse = await createPostResponse({
       fields: {
@@ -179,8 +190,14 @@ export const POST = async (req: Request) => {
     return Response.json(payload, { headers });
   } catch (err) {
     console.error('Error in POST:', err);
+
+    // Return the specific error to help identify the cause
     return new Response(
-      JSON.stringify({ error: 'An error occurred during processing' }),
+      JSON.stringify({
+        error: `An error occurred during processing: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      }),
       { status: 400, headers }
     );
   }
